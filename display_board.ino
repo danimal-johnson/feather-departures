@@ -6,16 +6,19 @@
 #include "Adafruit_MAX1704X.h"
 #include <Adafruit_NeoPixel.h>
 #include "Adafruit_TestBed.h"
-//#include <Adafruit_BME280.h>
 #include <Adafruit_ST7789.h> 
 #include <Fonts/FreeSans12pt7b.h>
+#include <WiFiClientSecure.h>
 #include "RTClib.h"
+#include "secrets.h"
 
 RTC_PCF8523 rtc;
 char daysOfTheWeek[7][5] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
-//Adafruit_BME280 bme; // I2C
-//bool bmefound = false;
+#define SERVER "transit-board-be.up.railway.app"
+#define PATH "/api"
+WiFiClientSecure client;
+
 extern Adafruit_TestBed TB;
 
 Adafruit_MAX17048 lipo;
@@ -23,6 +26,7 @@ Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
 GFXcanvas16 canvas(240, 135);
 String dtString = "Date and Time";
+String statusString = "Network";
 
 void setup() {
   Serial.begin(115200);
@@ -51,26 +55,12 @@ void setup() {
   Serial.print(F(" with Chip ID: 0x")); 
   Serial.println(lipo.getChipID(), HEX);
 
-//  if (TB.scanI2CBus(0x77)) {
-//    Serial.println("BME280 address");
-//
-//    unsigned status = bme.begin();  
-//    if (!status) {
-//      Serial.println("Could not find a valid BME280 sensor, check wiring, address, sensor ID!");
-//      Serial.print("SensorID was: 0x"); Serial.println(bme.sensorID(),16);
-//      Serial.print("        ID of 0xFF probably means a bad address, a BMP 180 or BMP 085\n");
-//      Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
-//      Serial.print("        ID of 0x60 represents a BME 280.\n");
-//      Serial.print("        ID of 0x61 represents a BME 680.\n");
-//      return;
-//    }
-//    Serial.println("BME280 found OK");
-//    bmefound = true;
-//  }
-
   pinMode(0, INPUT_PULLUP);
   pinMode(1, INPUT_PULLDOWN);
   pinMode(2, INPUT_PULLDOWN);
+
+  statusString = "Scanning Wifi...";
+  initWifi();
 }
 
 uint8_t j = 0;
@@ -87,7 +77,7 @@ void loop() {
     canvas.setTextColor(ST77XX_RED);
     canvas.println(dtString);
     canvas.setTextColor(ST77XX_YELLOW);
-    canvas.println("ESP32-S2 TFT Demo");
+    canvas.println(statusString);
     canvas.setTextColor(ST77XX_GREEN); 
     canvas.print("Battery: ");
     canvas.setTextColor(ST77XX_WHITE);
@@ -130,17 +120,17 @@ void loop() {
 }
 
 void initClock(void) {
-    if (! rtc.begin()) {
-      dtString = "RTC not found";
-      while (1) delay(100);
-      Serial.println("Waiting for RTC");
-    }
-    if (! rtc.initialized() || rtc.lostPower()) {
-      Serial.println("RTC is NOT initialized, setting to compile time!");
-      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    }
-    rtc.start();
-    dtString = "RTC Ready";
+  if (! rtc.begin()) {
+    dtString = "RTC not found";
+    while (1) delay(100);
+    Serial.println("Waiting for RTC");
+  }
+  if (! rtc.initialized() || rtc.lostPower()) {
+    Serial.println("RTC is NOT initialized, setting to compile time!");
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+  rtc.start();
+  dtString = "RTC Ready";
 }
 
 String getTimeString(void) {
@@ -157,4 +147,43 @@ String getTimeString(void) {
   if (minute < 10) retVal.concat("0");
   retVal.concat(String(minute));
   return retVal;
+}
+
+void initWifi(void) {
+  statusString = ("Conn to " + wifi_ssid); // What gets displayed on the TFT
+  
+  // attempt to connect to Wifi network:
+  Serial.print("Attempting to connect to SSID: ");
+  Serial.println(wifi_ssid);
+
+  WiFi.begin(wifi_ssid, wifi_password);
+  while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("Connected to WiFi");
+  printWifiStatus();
+}
+
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your board's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+
+  statusString = WiFi.SSID();
+  statusString.concat(" ");
+  statusString.concat(rssi);
 }
