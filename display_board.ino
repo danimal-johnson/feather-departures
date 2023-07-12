@@ -6,25 +6,32 @@
 #include "Adafruit_MAX1704X.h"
 #include <Adafruit_NeoPixel.h>
 #include "Adafruit_TestBed.h"
-#include <Adafruit_BME280.h>
+//#include <Adafruit_BME280.h>
 #include <Adafruit_ST7789.h> 
 #include <Fonts/FreeSans12pt7b.h>
+#include "RTClib.h"
 
-Adafruit_BME280 bme; // I2C
-bool bmefound = false;
+RTC_PCF8523 rtc;
+char daysOfTheWeek[7][5] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
+//Adafruit_BME280 bme; // I2C
+//bool bmefound = false;
 extern Adafruit_TestBed TB;
 
 Adafruit_MAX17048 lipo;
 Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
 GFXcanvas16 canvas(240, 135);
+String dtString = "Date and Time";
 
 void setup() {
   Serial.begin(115200);
   //while (! Serial) delay(10);
-  
+
   delay(100);
-  
+
+  initClock();
+ 
   TB.neopixelPin = PIN_NEOPIXEL;
   TB.neopixelNum = 1; 
   TB.begin();
@@ -36,7 +43,7 @@ void setup() {
   canvas.setTextColor(ST77XX_WHITE); 
 
   if (!lipo.begin()) {
-    Serial.println(F("Couldnt find Adafruit MAX17048?\nMake sure a battery is plugged in!"));
+    Serial.println(F("Couldn't find Adafruit MAX17048?\nMake sure a battery is plugged in!"));
     while (1) delay(10);
   }
     
@@ -44,22 +51,22 @@ void setup() {
   Serial.print(F(" with Chip ID: 0x")); 
   Serial.println(lipo.getChipID(), HEX);
 
-  if (TB.scanI2CBus(0x77)) {
-    Serial.println("BME280 address");
-
-    unsigned status = bme.begin();  
-    if (!status) {
-      Serial.println("Could not find a valid BME280 sensor, check wiring, address, sensor ID!");
-      Serial.print("SensorID was: 0x"); Serial.println(bme.sensorID(),16);
-      Serial.print("        ID of 0xFF probably means a bad address, a BMP 180 or BMP 085\n");
-      Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
-      Serial.print("        ID of 0x60 represents a BME 280.\n");
-      Serial.print("        ID of 0x61 represents a BME 680.\n");
-      return;
-    }
-    Serial.println("BME280 found OK");
-    bmefound = true;
-  }
+//  if (TB.scanI2CBus(0x77)) {
+//    Serial.println("BME280 address");
+//
+//    unsigned status = bme.begin();  
+//    if (!status) {
+//      Serial.println("Could not find a valid BME280 sensor, check wiring, address, sensor ID!");
+//      Serial.print("SensorID was: 0x"); Serial.println(bme.sensorID(),16);
+//      Serial.print("        ID of 0xFF probably means a bad address, a BMP 180 or BMP 085\n");
+//      Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
+//      Serial.print("        ID of 0x60 represents a BME 280.\n");
+//      Serial.print("        ID of 0x61 represents a BME 680.\n");
+//      return;
+//    }
+//    Serial.println("BME280 found OK");
+//    bmefound = true;
+//  }
 
   pinMode(0, INPUT_PULLUP);
   pinMode(1, INPUT_PULLDOWN);
@@ -72,12 +79,13 @@ void loop() {
   Serial.println("**********************");
 
   TB.printI2CBusScan();
+  dtString = getTimeString();
 
   if (j % 2 == 0) {
     canvas.fillScreen(ST77XX_BLACK);
     canvas.setCursor(0, 17);
     canvas.setTextColor(ST77XX_RED);
-    canvas.println("Adafruit Feather");
+    canvas.println(dtString);
     canvas.setTextColor(ST77XX_YELLOW);
     canvas.println("ESP32-S2 TFT Demo");
     canvas.setTextColor(ST77XX_GREEN); 
@@ -119,4 +127,34 @@ void loop() {
   TB.setColor(TB.Wheel(j++));
   delay(10);
   return;
+}
+
+void initClock(void) {
+    if (! rtc.begin()) {
+      dtString = "RTC not found";
+      while (1) delay(100);
+      Serial.println("Waiting for RTC");
+    }
+    if (! rtc.initialized() || rtc.lostPower()) {
+      Serial.println("RTC is NOT initialized, setting to compile time!");
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+    rtc.start();
+    dtString = "RTC Ready";
+}
+
+String getTimeString(void) {
+  DateTime now = rtc.now();
+  String retVal = daysOfTheWeek[now.dayOfTheWeek()];
+  retVal.concat(" ");
+  retVal.concat(now.month());
+  retVal.concat("/");
+  retVal.concat(now.day());
+  retVal.concat("  ");
+  retVal.concat(now.hour());
+  retVal.concat(":");
+  int minute = now.minute();
+  if (minute < 10) retVal.concat("0");
+  retVal.concat(String(minute));
+  return retVal;
 }
