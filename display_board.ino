@@ -109,6 +109,12 @@ void loop() {
     if (digitalRead(2)) {
       canvas.print("D2, ");
     }
+    // -- Go to Sleep --
+    if (digitalRead(1) && digitalRead(2)) {
+      Serial.println("Sleep mode requested");
+      // esp_sleep_enable_timer_wakeup(1000000 * 10); // 10 sec
+      esp_deep_sleep_start(); 
+    }
     display.drawRGBBitmap(0, 0, canvas.getBuffer(), 240, 135);
     pinMode(TFT_BACKLITE, OUTPUT);
     digitalWrite(TFT_BACKLITE, HIGH);
